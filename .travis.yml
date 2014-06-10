@@ -4,6 +4,13 @@ python:
   - "2.7"
 
 
+before_install:
+  - "sudo apt-get update"
+  - "wget https://get.docker.io/builds/Linux/x86_64/docker-latest -O docker"
+  - "chmod +x docker"
+
 install: "pip install ."
   
-script: nosetests tests
+script:
+  - nosetests tests
+  - "./docker images"
