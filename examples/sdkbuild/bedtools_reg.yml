@@ -1,0 +1,9 @@
+steps:
+  - register:
+      type: build
+      from: 83afe781a5d0 
+      cmd: echo
+      register:
+        repo: sinisa88/bedtools
+        tag: 83afe781a5d0
+        wrappers: Yes      

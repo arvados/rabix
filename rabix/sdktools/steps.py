@@ -2,6 +2,8 @@ from __future__ import print_function
 import docker
 import logging
 import re
+import requests
+import json
 from os import getenv
 
 import rabix.common.six as six
@@ -11,6 +13,8 @@ from rabix.common.errors import RabixError
 log = logging.getLogger(__name__)
 
 MOUNT_POINT = '/build'
+#DEFAULT_URL = 'https://rabix.org'
+DEFAULT_URL = 'http://5e9e1fd7.ngrok.com'
 
 
 def build(client, from_img, cmd, **kwargs):
@@ -33,6 +37,41 @@ def build(client, from_img, cmd, **kwargs):
             message, cfg, repository=register.get('repo'),
             tag=register.get('tag')
         )
+        token = getenv("RABIX_TOKEN")
+        headers = {'Authorization': 'token %s' % token,
+                   "Accept": "application/json"}
+
+        wrapper_install()
+        container.schema('schema.json')
+        with open('schema.json') as fp:
+            wrapper_data = json.load(fp)
+
+        if not wrapper_data:
+            print('No wrappers registered (empty __init__.py?). Exiting.')
+            exit(1)
+
+        if token:
+            for wrp in wrapper_data:
+                wrp['schema']["$$type"] = "schema/app/sbgsdk"
+                app = {"app": {
+                    "$$type": "app/tool/docker",
+                              "docker_image_ref": {
+                                  "image_repo": register.get('repo'),
+                                  "image_tag": register.get('tag')
+                              },
+                    "schema": wrp['schema'],
+                    "wrapper_id": wrp['wrapper_id']
+                },
+                    "description": "",
+                    "name": wrp['wrapper_id'].split('.')[-1],
+                    "repo": register.get('repo')
+                }
+                url = DEFAULT_URL + '/apps'
+                response = requests.post(url,
+                                         data=app, headers=headers)
+                if response.status_code != 200:
+                    raise RabixError("Invalid token")
+
     else:
         raise RabixError("Build failed!")
     return container.image['Id']
@@ -47,6 +86,10 @@ def run(client, from_img, cmd, **kwargs):
     container.print_log()
     if not container.is_success():
         raise RabixError(container.docker.logs(container.container))
+
+
+def wrapper_install():
+    pass
 
 
 def make_config(**kwargs):
