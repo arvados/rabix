@@ -21,8 +21,8 @@ def build(client, from_img, **kwargs):
     cmd = kwargs.pop('cmd', None)
     if not cmd:
         raise RabixError("Commands ('cmd') not specified!")
-    entrypoint = []
     docker = kwargs.pop('docker', {})
+    entrypoint = ['/bin/sh', '-c']
     mount_point = kwargs.pop('mount_point', MOUNT_POINT)
     cfg = make_config(entrypoint=entrypoint)
     container = Container(client, from_img, cfg, mount_point=mount_point)

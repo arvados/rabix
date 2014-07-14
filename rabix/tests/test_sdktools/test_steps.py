@@ -10,7 +10,7 @@ from rabix.common.errors import RabixError
 def test_run_ok(container_mock):
     container_mock().is_success = mock.Mock(return_value=True)
 
-    steps.run('docker_client', 'image_id', ['cmd'])
+    steps.run('docker_client', 'image_id', cmd=['cmd'])
 
     assert_run(container_mock)
 
@@ -22,7 +22,7 @@ def test_run_fail(container_mock):
 
     try:
         steps.run('docker_client', 'image_id',
-                  ['cmd'], mount_point=steps.MOUNT_POINT)
+                  cmd=['cmd'], mount_point=steps.MOUNT_POINT)
     finally:
         assert_run(container_mock)
 
@@ -40,8 +40,8 @@ def test_build_ok(container_mock):
     c = container_mock()
     c.is_success = mock.Mock(return_value=True)
 
-    steps.build('docker_client', 'image_id', ['cmd'], message='message',
-                register={'repo': 'repo', 'tag': 'tag'})
+    steps.build('docker_client', 'image_id', cmd=['cmd'], message='message',
+                docker={'repo': 'repo', 'tag': 'tag'})
 
     container_mock.assert_called_with('docker_client', 'image_id',
                                       {'Entrypoint': ['/bin/sh', '-c']},
@@ -56,8 +56,8 @@ def test_build_ok(container_mock):
 def test_build_ok(container_mock):
     container_mock().is_success = mock.Mock(return_value=True)
 
-    steps.build('docker_client', 'image_id', ['cmd'], message='message',
-                register={'repo': 'repo', 'tag': 'tag'})
+    steps.build('docker_client', 'image_id', cmd=['cmd'], message='message',
+                docker={'repo': 'repo', 'tag': 'tag'})
 
     assert_build(container_mock)
     container_mock().commit.assert_called_with('message', {'Cmd': []},
@@ -70,8 +70,8 @@ def test_build_fail(container_mock):
     container_mock().is_success = mock.Mock(return_value=False)
 
     try:
-        steps.build('docker_client', 'image_id', ['cmd'], message='message',
-                    register={'repo': 'repo', 'tag': 'tag'})
+        steps.build('docker_client', 'image_id', cmd=['cmd'], message='message',
+                    docker={'repo': 'repo', 'tag': 'tag'})
     finally:
         assert_build(container_mock)
         assert not container_mock().commit.called
