@@ -8,12 +8,18 @@ steps:
         - cd bedtools-2.17.0
         - make
         - ./bin/bedtools  # Just print usage
+      docker:
+        - repo: docker_repo
+        - tag: docker_tag
 
   - package_tool:
       type: build
       from: ubuntu:14.04
       cmd: cp ./bedtools-2.17.0/bin/bedtools /usr/bin
       entrypoint: /usr/bin/bedtools
+      docker:
+        - repo: docker_repo
+        - tag: docker_tag
 
   - test_tool:
       type: run

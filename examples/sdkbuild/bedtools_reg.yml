@@ -1,9 +1,11 @@
 steps:
-  - register:
-      type: build
-      from: 83afe781a5d0 
-      cmd: echo
+  - install_wrp_and_reg:
+      type: register
+      from: rabix-adapter
+      package_name: sbg_bedtools
       register:
         repo: sinisa88/bedtools
-        tag: 83afe781a5d0
-        wrappers: Yes      
+        tag: v1.0
+      wrappers:
+        repo: images.sbgenomics.com/sinisa/useless
+        tag: 123456789

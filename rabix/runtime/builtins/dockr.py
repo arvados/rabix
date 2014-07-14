@@ -210,7 +210,8 @@ class Container(object):
                  mount_point='/rabix'):
         self.docker = docker_client
         try:
-            self.base_cmd = docker_client.inspect_image(image_id)['config']['Cmd']
+            self.base_cmd = docker_client.inspect_image(image_id)['config'][
+                'Cmd']
         except:
             self.base_cmd = []
         self.base_image_id = image_id
@@ -319,8 +320,8 @@ class Container(object):
             cmd += ['--cwd', cwd]
         return self.run(cmd)
 
-    def schema(self, output=None):
-        cmd = self.base_cmd + ['schema']
+    def schema(self, package, output=None):
+        cmd = self.base_cmd + ['schema', '--package', package]
         cmd += ['--output', output] if output else []
         return self.run_and_print(cmd)
 

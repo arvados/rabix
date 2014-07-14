@@ -13,14 +13,18 @@ from rabix.common.errors import RabixError
 log = logging.getLogger(__name__)
 
 MOUNT_POINT = '/build'
-#DEFAULT_URL = 'https://rabix.org'
+# DEFAULT_URL = 'https://rabix.org'
 DEFAULT_URL = 'http://5e9e1fd7.ngrok.com'
 
 
-def build(client, from_img, cmd, **kwargs):
-    entrypoint = ['/bin/sh', '-c']
-    cfg = make_config(entrypoint=entrypoint)
+def build(client, from_img, **kwargs):
+    cmd = kwargs.pop('cmd', None)
+    if not cmd:
+        raise RabixError("Commands ('cmd') not specified!")
+    entrypoint = []
+    docker = kwargs.pop('docker', {})
     mount_point = kwargs.pop('mount_point', MOUNT_POINT)
+    cfg = make_config(entrypoint=entrypoint)
     container = Container(client, from_img, cfg, mount_point=mount_point)
 
     run_cmd = make_cmd(cmd)
@@ -30,54 +34,68 @@ def build(client, from_img, cmd, **kwargs):
 
     if container.is_success():
         message = kwargs.pop('message', None)
-        register = kwargs.pop('register', {})
+
         cfg = {"Cmd": []}
         cfg.update(make_config(**kwargs))
         container.commit(
-            message, cfg, repository=register.get('repo'),
-            tag=register.get('tag')
+            message, cfg, repository=docker.get('repo'),
+            tag=docker.get('tag')
         )
-        token = getenv("RABIX_TOKEN")
-        headers = {'Authorization': 'token %s' % token,
-                   "Accept": "application/json"}
-
-        wrapper_install()
-        container.schema('schema.json')
-        with open('schema.json') as fp:
-            wrapper_data = json.load(fp)
-
-        if not wrapper_data:
-            print('No wrappers registered (empty __init__.py?). Exiting.')
-            exit(1)
-
-        if token:
-            for wrp in wrapper_data:
-                wrp['schema']["$$type"] = "schema/app/sbgsdk"
-                app = {"app": {
-                    "$$type": "app/tool/docker",
-                              "docker_image_ref": {
-                                  "image_repo": register.get('repo'),
-                                  "image_tag": register.get('tag')
-                              },
-                    "schema": wrp['schema'],
-                    "wrapper_id": wrp['wrapper_id']
-                },
-                    "description": "",
-                    "name": wrp['wrapper_id'].split('.')[-1],
-                    "repo": register.get('repo')
-                }
-                url = DEFAULT_URL + '/apps'
-                response = requests.post(url,
-                                         data=app, headers=headers)
-                if response.status_code != 200:
-                    raise RabixError("Invalid token")
-
     else:
         raise RabixError("Build failed!")
     return container.image['Id']
 
 
-def run(client, from_img, cmd, **kwargs):
+def register(client, from_img, **kwargs):
+    wrappers = kwargs.pop('wrappers', None)
+    reg = kwargs.pop('register', None)
+    package_name = kwargs.pop('package_name', None)
+
+    if wrappers:
+        cfg = {'docker': {'repo': wrappers.get('repo'),
+                          'tag': wrappers.get('tag')},
+               'Cmd': ['rabix-adapter']}
+        from_img = install_wrapper(client, from_img, **cfg)
+
+    if reg:
+        token = getenv("RABIX_TOKEN")
+        headers = {'Authorization': 'token %s' % token,
+                   'Accept': 'application/json'}
+        container = Container(client, from_img, mount_point=MOUNT_POINT)
+        container.schema(package_name, 'schema.json')
+        with open('schema.json') as fp:
+            wrapper_data = json.load(fp)
+
+        if not wrapper_data:
+            print('No wrappers installed on the image. Exiting.')
+            exit(1)
+
+        for wrp in wrapper_data:
+            wrp['schema']["$$type"] = "schema/app/sbgsdk"
+            app = {"app": {
+                "$$type": "app/tool/docker",
+                "docker_image_ref": {
+                    "image_repo": reg.get('repo'),
+                    "image_tag": reg.get('tag')
+                },
+                "schema": wrp['schema'],
+                "wrapper_id": wrp['wrapper_id']
+            },
+                "description": "",
+                "name": wrp['wrapper_id'].split('.')[-1],
+                "repo": reg.get('repo')
+            }
+            url = DEFAULT_URL + '/apps'
+            response = requests.post(url,
+                                     data=json.dumps(app), headers=headers)
+            if response.status_code != 200:
+                raise RabixError("Invalid token")
+
+
+def run(client, from_img, **kwargs):
+    cmd = kwargs.pop('cmd', None)
+    if not cmd:
+        raise RabixError("Commands ('cmd') not specified!")
     cfg = make_config(**kwargs)
     run_cmd = make_cmd(cmd)
     mount_point = kwargs.pop('mount_point', MOUNT_POINT)
@@ -88,8 +106,14 @@ def run(client, from_img, cmd, **kwargs):
         raise RabixError(container.docker.logs(container.container))
 
 
-def wrapper_install():
-    pass
+def install_wrapper(client, from_img, **kwargs):
+    cmd = [
+        'pip install -e "git+https://github.com/rabix/rabix.git'
+        '@devel#egg=rabix-core&subdirectory=rabix-core"',
+        'cd ' + MOUNT_POINT,
+        'pip install .'
+    ]
+    return build(client, from_img, cmd=cmd, **kwargs)
 
 
 def make_config(**kwargs):
@@ -116,18 +140,19 @@ def make_cmd(cmd):
 
 
 class Runner(object):
-
-    def __init__(self, docker, steps=None, context=None):
+    def __init__(self, docker, steps=None, context=None, config=None):
         self.types = {
             "run": run,
-            "build": build
+            "build": build,
+            "register": register
         }
         self.types.update(steps or {})
 
         self.context = context or {}
 
         self.docker = docker
-        pass
+
+        self.config = config or {}
 
     def run(self, config):
         steps = config['steps']
@@ -147,14 +172,9 @@ class Runner(object):
             if not img:
                 raise RabixError("Base image ('from') not specified!")
 
-            cmd = resolved.pop('cmd', None)
-            if not cmd:
-                raise RabixError("Commands ('cmd') not specified!")
-
             log.info("Running step: %s" % step_name)
             self.context[step_name] = \
-                step_type(self.docker, img, cmd, **resolved)
-        pass
+                step_type(self.docker, img, **resolved)
 
     def resolve(self, val):
         if isinstance(val, list):
