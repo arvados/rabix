@@ -59,7 +59,6 @@ def register(client, from_img, **kwargs):
 
     if reg:
         token = getenv("RABIX_TOKEN")
-        token = '415975b0-906b-4ae5-8f36-b87c60e0e36e'
         headers = {'Authorization': 'token %s' % token,
                    'Accept': 'application/json'}
         container = Container(client, from_img, mount_point=MOUNT_POINT)
@@ -98,7 +97,7 @@ def run(client, from_img, **kwargs):
     if not cmd:
         raise RabixError("Commands ('cmd') not specified!")
     cfg = make_config(**kwargs)
-    run_cmd = make_cmd(cmd)
+    run_cmd = make_cmd(cmd, join=True)
     mount_point = kwargs.pop('mount_point', MOUNT_POINT)
     container = Container(client, from_img, cfg, mount_point=mount_point)
     container.run(run_cmd)
@@ -128,7 +127,7 @@ def make_config(**kwargs):
     cfg = {k: v for k, v in six.iteritems(cfg) if k in keys}
     entrypoint = cfg.get("Entrypoint")
     if isinstance(entrypoint, six.string_types):
-        cfg['Entrypoint'] = [entrypoint]
+        cfg['Entrypoint'] = shlex.split(entrypoint)
 
     return cfg
 
