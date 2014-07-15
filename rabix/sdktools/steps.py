@@ -4,6 +4,7 @@ import logging
 import re
 import requests
 import json
+import shlex
 from os import getenv
 
 import rabix.common.six as six
@@ -22,14 +23,13 @@ def build(client, from_img, **kwargs):
     if not cmd:
         raise RabixError("Commands ('cmd') not specified!")
     docker = kwargs.pop('docker', {})
-    entrypoint = ['/bin/sh', '-c']
     mount_point = kwargs.pop('mount_point', MOUNT_POINT)
-    cfg = make_config(entrypoint=entrypoint)
+    cfg = make_config()
     container = Container(client, from_img, cfg, mount_point=mount_point)
 
-    run_cmd = make_cmd(cmd)
+    run_cmd = make_cmd(cmd, join=True)
 
-    container.run(run_cmd)
+    container.run(run_cmd, override_entrypoint=True)
     container.print_log()
 
     if container.is_success():
@@ -59,6 +59,7 @@ def register(client, from_img, **kwargs):
 
     if reg:
         token = getenv("RABIX_TOKEN")
+        token = '415975b0-906b-4ae5-8f36-b87c60e0e36e'
         headers = {'Authorization': 'token %s' % token,
                    'Accept': 'application/json'}
         container = Container(client, from_img, mount_point=MOUNT_POINT)
@@ -132,10 +133,11 @@ def make_config(**kwargs):
     return cfg
 
 
-def make_cmd(cmd):
+def make_cmd(cmd, join=False):
     if isinstance(cmd, six.string_types):
-        cmd = [cmd]
-
+        return shlex.split(cmd)
+    elif isinstance(cmd, list) and len(cmd) > 1 and join:
+        return ['/bin/sh', '-c', ' && '.join(cmd)]
     return cmd
 
 
